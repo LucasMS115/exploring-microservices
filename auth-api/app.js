@@ -13,5 +13,5 @@ app.get("/api/status", (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.info(`## Server started successfully at port: ${PORT} ##`);
+    console.info(`## Auth API server started successfully at port: ${PORT} ##`);
 });
