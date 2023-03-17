@@ -1,8 +1,54 @@
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+
 import UserRepository from "../repository/UserRepository.js";
 import UserException from "../exception/UserException.js";
 import * as httpStatus from "../../../config/constants/httpStatus.js";
+import * as secrets from "../../../config/constants/secret.js";
 
 class UserService {
+
+    async getAccessToken(req) {
+        try {
+            const { email, password } = req.body;
+            this.validateAccessTokenSolicitation(email, password);
+            console.info("[getAccessToken] Email validated: " + email);
+
+            let user = await UserRepository.findByEmail(email);
+            this.validateUserNotFound(user);
+            console.info("[getAccessToken] User validated: " + JSON.stringify({id: user.id, name: user.name}));
+
+            await this.validatePassword(password, user.password);
+            console.info("[getAccessToken] Password validated" );
+
+            const authUser = {
+                id: user.id,
+                email: user.email,
+                name: user.name
+            }
+
+            console.info("[getAccessToken] Creating tokent with jwt sign.");
+            const accessToken = jwt.sign(
+                { authUser },
+                secrets.API_SECRET,
+                { expiresIn: "1d" }
+            );
+
+            console.info("[getAccessToken] Returning access token.");
+            return {
+                status: httpStatus.SUCCESS,
+                accessToken
+            }
+
+        } catch (error) {
+            return {
+                status: error.status ? error.status : httpStatus.INTERNAL_SERVER_ERROR,
+                message: error.message ? error.message : "Couldn't complete operation. Try again later."
+            }
+        }
+
+
+    }
 
     async findByEmail(req) {
         console.info("[findByEmail] Starting find by email");
@@ -33,6 +79,15 @@ class UserService {
         }
     }
 
+    validateAccessTokenSolicitation(email, password) {
+        this.validateEmail(email);
+
+        if (!password) {
+            console.info("[validateAccessTokenSolicitation]Password not informed. Throwing user exception.");
+            throw new UserException(httpStatus.BAD_REQUEST, "Password must be informed.");
+        }
+    }
+
     validateEmail(email) {
         if (!this.emailRegexCheck(email)) {
             console.info("[validateEmail] Invalid email. Throwing user exception.");
@@ -41,17 +96,26 @@ class UserService {
     }
 
     emailRegexCheck = (email) => {
+        const EMAIL_FORMAT_REGEX = /^[a-zA-Z0-9_.+]+(?<!^[0-9]*)@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+
         return String(email)
             .toLowerCase()
-            .match(
-                /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
-            );
+            .match(EMAIL_FORMAT_REGEX);
     };
 
     validateUserNotFound(user) {
         if (!user) {
             console.info("[validateUserNotFound] User was not found. Throwing user exception.");
             throw new UserException(httpStatus.NOT_FOUND, "User not found.");
+        }
+    }
+
+    async validatePassword(password, hashPassword) {
+        const passwordMatch = await bcrypt.compare(password, hashPassword);
+
+        if (!passwordMatch) {
+            console.info("[validatePassword] Password doesn't match. Throwing user error.");
+            throw new UserException(httpStatus.UNAUTHORIZED, "Passwords doesn't match.");
         }
     }
 }
