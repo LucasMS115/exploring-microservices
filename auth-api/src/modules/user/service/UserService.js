@@ -58,9 +58,10 @@ class UserService {
             this.validateEmail(email);
             console.info("[findByEmail] Email validated: " + email);
 
-
             let user = await UserRepository.findByEmail(email);
+
             this.validateUserNotFound(user);
+            this.validateAuthenticatedUser(user, req.authUser);
             console.info("[findByEmail] user validated. Returning user: " + JSON.stringify(user));
 
             return {
@@ -76,6 +77,19 @@ class UserService {
                 status: error.status ? error.status : httpStatus.INTERNAL_SERVER_ERROR,
                 message: error.message ? error.message : "Couldn't complete operation. Try again later."
             }
+        }
+    }
+
+    validateAuthenticatedUser(user, authUser) {
+        //OBS: in a real system, it would be better to not use messages where someone can discover which emails are from valid users.
+        if(!authUser) {
+            console.info("[validateAuthenticatedUser] authUser not found.");
+            throw new UserException(httpStatus.FORBIDDEN, "No athenticated user.");
+        }
+
+        if(user.id !== authUser.id) {
+            console.info("[validateAuthenticatedUser] user ids doesn't match.");
+            throw new UserException(httpStatus.FORBIDDEN, "Authenticated user does't has permission to request data from other users.");
         }
     }
 
